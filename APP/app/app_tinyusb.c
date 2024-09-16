@@ -17,17 +17,6 @@
 #include "app_tinyusb.h"
 #include "driver_tool.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/reent.h>
-#include "esp_log.h"
-#include "esp_vfs.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "tinyusb.h"
-#include "tusb_cdc_acm.h"
-#include "tusb_console.h"
-#include "sdkconfig.h"
 
 #define APP_BUTTON (GPIO_NUM_0) // Use BOOT signal by default
 
@@ -157,7 +146,7 @@ void dispose_gamepad_key()
 
 
 
-void app_tinyusb(void)
+void app_tinyusb(void * pvParameters)
 {
 //	char **cp = tiny_descriptor;
     // Initialize button that will trigger HID reports
@@ -198,54 +187,8 @@ void app_tinyusb(void)
         	vTaskDelay(pdMS_TO_TICKS(10));
         } else {
         	vTaskDelay(pdMS_TO_TICKS(300));
-        	GUA_LOGI("wait usb\n");
+//        	GUA_LOGI("wait usb\n");
         }
-    }
-}
-
-void app_tinyusb_serial(void)
-{
-	int32 ret = 0;
-	tinyusb_config_cdcacm_t acm_cfg = { 0 }; // the configuration uses default values
-
-    /* Setting TinyUSB up */
-	GUA_LOGI("USB initialization");
-
-    const tinyusb_config_t tusb_cfg = {
-        .device_descriptor = NULL,
-        .string_descriptor = NULL,
-        .external_phy = false, // In the most cases you need to use a `false` value
-        .configuration_descriptor = NULL,
-    };
-
-    ret = tinyusb_driver_install(&tusb_cfg);
-    if (ret != ESP_OK) {
-    	GUA_LOGE("tinyusb_driver_install err!");
-    }
-
-    ret = tusb_cdc_acm_init(&acm_cfg);
-	if (ret != ESP_OK) {
-		GUA_LOGE("tusb_cdc_acm_init err!");
-	}
-
-    GUA_LOGE("USB initialization DONE");
-
-    while (1) {
-    	GUA_LOGI("log -> UART");
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        fprintf(stdout, "example: print -> stdout\n");
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        fprintf(stderr, "example: print -> stderr\n");
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        esp_tusb_init_console(TINYUSB_CDC_ACM_0); // log to usb
-        GUA_LOGI("log -> USB");
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        fprintf(stdout, "example: print -> stdout\n");
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        fprintf(stderr, "example: print -> stderr\n");
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        esp_tusb_deinit_console(TINYUSB_CDC_ACM_0); // log to uart
     }
 }
 

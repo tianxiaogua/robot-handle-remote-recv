@@ -3,19 +3,19 @@ file(GLOB_RECURSE SOURCES
 	../APP/app/*.c
 	../APP/driver/*.c
 	../APP/driver/tools/*.c
-#	../APP/LCD/*.c
-#	../APP/PCA9557/*.c
-#	../APP/MPU6050/*.c
+	../APP/component/wifi/wifi.c
+	../APP/component/nvs/nvs.c 
+	../APP/component/softAP/softAP.c 
 )
-
+ 
 set(inc
 "."
 ../APP/app
 ../APP/driver
 ../APP/driver/tools
-#../APP/LCD
-#../APP/PCA9557
-#../APP/MPU6050
+../APP/component/wifi
+../APP/component/nvs 
+../APP/component/softAP
 )
  
 idf_component_register(

@@ -13,7 +13,19 @@
 #include "driver_pwm_beep.h"
 #include "driver_tool.h"
 
+#include "wifi.h"
+#include "nvs.h"
+#include "softAP.h"
+
+
+
 static USB_OUT_CFG usb_out_config;
+
+
+TaskHandle_t Handle_APP_task = NULL; //创建句柄
+TaskHandle_t Handle_usb_task = NULL;
+TaskHandle_t Handle_wifi_task = NULL;
+
 
 
 // 获取接收器模式 USB输出为串口模式、USB输出为手柄模式
@@ -42,10 +54,27 @@ static void app_recv_usb_handle(void * pvParameters)
 	}
 }
 
-void usb_task()
+void usb_task(void)
 {
-	app_tinyusb();
+	// 创建USB控制任务
+	xTaskCreatePinnedToCore(app_tinyusb,            //任务函数
+							"usb_task",          //任务名称
+							4096,                //堆栈大小
+							NULL,                //传递参数
+							3,                   //任务优先级
+							&Handle_usb_task,    //任务句柄
+							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
 }
+
+ // 用于在接收到数据时处理
+static void softAP_recv_data_callback(uint8 *recv_buffer, uint32 recv_len)
+{
+	GUA_LOGI("callback: data len:%d", recv_len);
+	cmp_softAP_send_data(recv_buffer, recv_len);
+}
+
+
+
 
 esp_err_t init_app(void)
 {
@@ -57,12 +86,9 @@ esp_err_t init_app(void)
 }
 
 
-//创建句柄
-TaskHandle_t Handle_APP_task = NULL;
-TaskHandle_t Handle_usb_task = NULL;
 void start_app(void)
 {
-
+	int32 ret = 0;
 	// 创建LCD控制任务
 	xTaskCreatePinnedToCore(app_recv_usb_handle,            //任务函数
 							"app_recv_usb_handle",          //任务名称
@@ -72,14 +98,18 @@ void start_app(void)
 							&Handle_APP_task,    //任务句柄
 							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
 
-	// 创建USB控制任务
-	xTaskCreatePinnedToCore(usb_task,            //任务函数
-							"usb_task",          //任务名称
-							4096,                //堆栈大小
-							NULL,                //传递参数
-							3,                   //任务优先级
-							&Handle_usb_task,    //任务句柄
-							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
+	usb_task();
+	ret = cmp_softAP_init();
+	if (ret != REV_OK) {
+		GUA_LOGE("err");
+	}
+	cmp_softAP_bulid_tcp_server();
+	cmp_softAP_register_recv(softAP_recv_data_callback);
+	while (1)
+	{
+		delay_ms(100000);
+	}
+	
 }
 
 
