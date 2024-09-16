@@ -17,7 +17,7 @@
 #include "nvs.h"
 #include "softAP.h"
 
-
+#include "protocol.h"
 
 static USB_OUT_CFG usb_out_config;
 
@@ -26,7 +26,7 @@ TaskHandle_t Handle_APP_task = NULL; //创建句柄
 TaskHandle_t Handle_usb_task = NULL;
 TaskHandle_t Handle_wifi_task = NULL;
 
-
+KEY_DETECTION key_data;
 
 // 获取接收器模式 USB输出为串口模式、USB输出为手柄模式
 static int32 app_get_usb_model(void)
@@ -69,16 +69,42 @@ void usb_task(void)
  // 用于在接收到数据时处理
 static void softAP_recv_data_callback(uint8 *recv_buffer, uint32 recv_len)
 {
+	char json_buf[256];
 	GUA_LOGI("callback: data len:%d", recv_len);
+	if (recv_len > 256) {
+		GUA_LOGE("recv data length is too long!");
+		return;
+	}
+	strcpy(json_buf, (char *)recv_buffer);
+	protocol_decode(json_buf, &key_data);
+	printf("UP:%d DOWN:%d LEFT:%d RIGHT:%d A:%d B:%d X:%d Y:%d LB:%d RB:%d START:%d SELECT:%d R_KEY:%d L_KEY:%d  %d %d %d %d\r\n",
+	key_data.KEY_UP_,
+	key_data.KEY_DOWN_,
+	key_data.KEY_LEFT,
+	key_data.KEY_RIGHT,
+	key_data.KEY_A,
+	key_data.KEY_B,
+	key_data.KEY_X,
+	key_data.KEY_Y,
+	key_data.KEY_LB,
+	key_data.KEY_RB,
+	key_data.KEY_START,
+	key_data.KEY_SELECT,
+	key_data.KEY_R_KEY,
+	key_data.KEY_L_KEY,
+	key_data.LX,
+	key_data.LY,
+	key_data.RX,
+	key_data.RY
+	);
+	
 	cmp_softAP_send_data(recv_buffer, recv_len);
 }
-
-
-
 
 esp_err_t init_app(void)
 {
 //	int32 ret = 0;
+	
 	printf("\n\n-----------------ESP32 GAMEPAD----------------------\nV1.0.0 -HRAD V1.3\n\n");
 	driver_init_gpio();
 

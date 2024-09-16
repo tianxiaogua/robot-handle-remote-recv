@@ -11,14 +11,15 @@
 #define EXAMPLE_MAX_STA_CONN       4
 #define PORT 3333
 
-typedef void (*cmp_softAP_recv_data_callback)(uint8 *recv_buffer, uint32 recv_len); // 用于在接收到数据时处理
+#define SOCKET_RECV_BUF_LEN 512
 
+typedef void (*cmp_softAP_recv_data_callback)(uint8 *recv_buffer, uint32 recv_len); // 用于在接收到数据时处理
 typedef struct 
 {
     /* data */
     cmp_softAP_recv_data_callback recv_data_callback;
     uint32 recv_len;
-    uint8 recv_buffer[128];
+    uint8 recv_buffer[SOCKET_RECV_BUF_LEN];
     int32 socket_client_fd;
 }SOFTAP_CFG;
 

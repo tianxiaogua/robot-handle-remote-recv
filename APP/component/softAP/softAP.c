@@ -143,7 +143,7 @@ static int32 tcp_recv_data(const int sock)
 
 static void tcp_init_server(void * pvParameters)
 {
-    char addr_str[128];
+    char addr_str[SOCKET_RECV_BUF_LEN];
     int addr_family = AF_INET;
     
     int listen_sock = 0;
