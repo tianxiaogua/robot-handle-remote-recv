@@ -1,7 +1,3 @@
-#include "protocol.h"
-#include "cJSON.h"
-#include "driver_tool.h"
-
 /*
  * 遥控手柄的网络部分的无线数据协议通过json形式解析
  *
@@ -29,13 +25,16 @@
  * 			"RY":1,
  * 		},
  *  "D":1
- * }*/
+ * }
+ * 
+ * test data: {"hd":"H3.1S1.0","v":{"U":1,"D":2,"L":3,"R":4,"A":5,"B":6,"X":7,"Y":8,"LB":9,"RB":10,"ST":11,"SE":12,"RK":13,"LK":14,"LX":15,"LY":16,"RX":17,"RY":18}}
+ * */
 
+#include "protocol.h"
+#include "cJSON.h"
+#include "driver_tool.h"
 
-
-//char receiveData[] = {'{"hd":"H3.1S1.0","v":{"U":1,"D":1,"L":1,"R":1,"A":1,"B":1,"X":1,"Y":1,"LB":1,"RB":1,"ST":1,"SE":1,"RK":1,"LK":1,"LX":1,"LY":1,"RX":1,"RY":1,},"D":1}'};
-
-//char receiveData[] = "{\"hd\":\"H3.1S1.0\",\"v\":{\"U\":1,\"D\":1,\"L\":1,\"R\":1}}";
+#define GAMEPAD_PROTOCOL_V1 "H3.1S1.0"
 
 #define PRO_HEAD          "hd"
 #define PRO_VALUE         "v"
@@ -57,29 +56,6 @@
 #define PRO_VALUE_LY      "LY"
 #define PRO_VALUE_RX      "RX"
 #define PRO_VALUE_RY      "RY"
-
-char pro_value_name[][32] = {
-		PRO_HEAD,
-		PRO_VALUE,
-		PRO_VALUE_LEFT,
-		PRO_VALUE_RIGHT,
-		PRO_VALUE_UP,
-		PRO_VALUE_DOWN,
-		PRO_VALUE_A ,
-		PRO_VALUE_B,
-		PRO_VALUE_X,
-		PRO_VALUE_Y,
-		PRO_VALUE_LB,
-		PRO_VALUE_RB,
-		PRO_VALUE_SELECT,
-		PRO_VALUE_START,
-		PRO_VALUE_R_KEY,
-		PRO_VALUE_L_KEY,
-		PRO_VALUE_LX,
-		PRO_VALUE_LY,
-		PRO_VALUE_RX,
-		PRO_VALUE_RY,
-};
 
 enum PRO_NAME
 {
@@ -105,8 +81,36 @@ enum PRO_NAME
 	PRO_VALUE_RY_E,
 };
 
-#define GAMEPAD_PROTOCOL_V1 "H3.1S1.0"
+static char pro_value_name[][32] = {
+		PRO_HEAD,
+		PRO_VALUE,
+		PRO_VALUE_LEFT,
+		PRO_VALUE_RIGHT,
+		PRO_VALUE_UP,
+		PRO_VALUE_DOWN,
+		PRO_VALUE_A ,
+		PRO_VALUE_B,
+		PRO_VALUE_X,
+		PRO_VALUE_Y,
+		PRO_VALUE_LB,
+		PRO_VALUE_RB,
+		PRO_VALUE_SELECT,
+		PRO_VALUE_START,
+		PRO_VALUE_R_KEY,
+		PRO_VALUE_L_KEY,
+		PRO_VALUE_LX,
+		PRO_VALUE_LY,
+		PRO_VALUE_RX,
+		PRO_VALUE_RY,
+};
 
+/**
+ * @brief 把value字段的具体键值解析出数据
+ * 
+ * @param p_value json字段
+ * @param name  要解析的字段的名字
+ * @return int32 
+ */
 static int32 protocol_decode_value_int_data(cJSON *p_value, char *name)
 {
     cJSON *p_value_data = NULL;
@@ -129,6 +133,13 @@ static int32 protocol_decode_value_int_data(cJSON *p_value, char *name)
     return REV_OK;
 }
 
+/**
+ * @brief 解析value字段
+ * 
+ * @param root 输入的json字段
+ * @param key_value 输出的数据
+ * @return int32 
+ */
 static int32 protocol_decode_value(cJSON *root, KEY_DETECTION *key_value)
 {
     int32 ret = 0;
@@ -138,7 +149,7 @@ static int32 protocol_decode_value(cJSON *root, KEY_DETECTION *key_value)
 		if (ret == REV_ERR) {
 			return REV_ERR;
 		}
-		switch(i){
+		switch(i) {
 		case PRO_VALUE_LEFT_E:   key_value->KEY_LEFT = ret; break;
 		case PRO_VALUE_RIGHT_E:  key_value->KEY_RIGHT = ret; break;
 		case PRO_VALUE_UP_E:     key_value->KEY_UP_ = ret; break;
@@ -162,6 +173,13 @@ static int32 protocol_decode_value(cJSON *root, KEY_DETECTION *key_value)
     return REV_OK;
 }
 
+/**
+ * @brief 解析json协议
+ * 
+ * @param json_str 输入的字符串
+ * @param key_value 输出的解析好的数据
+ * @return int32 
+ */
 int32 protocol_decode(const char *json_str, KEY_DETECTION *key_value)
 {
     cJSON *p_json_root; // 根节点
@@ -200,4 +218,65 @@ int32 protocol_decode(const char *json_str, KEY_DETECTION *key_value)
     }
     
     return REV_OK;
+}
+
+/**
+ * @brief 编码json数据
+ * 
+ * @param json_str 输出的编码字符串
+ * @param key_value 输入的要编码的数据
+ * @return int32 
+ */
+int32 protocol_encode(char *json_str, KEY_DETECTION *key_value)
+{
+	cJSON *p_root;
+	cJSON *p_value;
+	cJSON *ret;
+	int32 value_data = 0;
+	uint32 i = 0;
+	char *json_buf;
+
+	p_root = cJSON_CreateObject(); // 创建JSON根部结构体
+	if (!p_root) {
+		GUA_LOGE("cjson create error!");
+	}
+	p_value = cJSON_CreateObject(); // 创建JSON子叶结构体
+	if (!p_value) {
+		GUA_LOGE("cjson create error!");
+	}
+
+	cJSON_AddStringToObject(p_root, PRO_HEAD, GAMEPAD_PROTOCOL_V1); // 添加字符串类型数据到根部结构体
+	cJSON_AddItemToObject(p_root, PRO_VALUE, p_value);
+
+    for (i=PRO_VALUE_LEFT_E; i < (sizeof(pro_value_name) / sizeof(pro_value_name[0])); i++) {
+		switch(i) {
+		case PRO_VALUE_LEFT_E:   value_data = key_value->KEY_LEFT; break;
+		case PRO_VALUE_RIGHT_E:  value_data = key_value->KEY_RIGHT; break;
+		case PRO_VALUE_UP_E:     value_data = key_value->KEY_UP_; break;
+		case PRO_VALUE_DOWN_E:   value_data = key_value->KEY_DOWN_; break;
+		case PRO_VALUE_A_E:      value_data = key_value->KEY_A; break;
+		case PRO_VALUE_B_E:      value_data = key_value->KEY_B; break;
+		case PRO_VALUE_X_E:      value_data = key_value->KEY_X; break;
+		case PRO_VALUE_Y_E:      value_data = key_value->KEY_Y; break;
+		case PRO_VALUE_LB_E:     value_data = key_value->KEY_LB; break;
+		case PRO_VALUE_RB_E:     value_data = key_value->KEY_RB; break;
+		case PRO_VALUE_SELECT_E: value_data = key_value->KEY_SELECT; break;
+		case PRO_VALUE_START_E:  value_data = key_value->KEY_START; break;
+		case PRO_VALUE_R_KEY_E:  value_data = key_value->KEY_R_KEY; break;
+		case PRO_VALUE_L_KEY_E:  value_data = key_value->KEY_L_KEY; break;
+		case PRO_VALUE_LX_E:     value_data = key_value->LX; break;
+		case PRO_VALUE_LY_E:     value_data = key_value->LY; break;
+		case PRO_VALUE_RX_E:     value_data = key_value->RX; break;
+		case PRO_VALUE_RY_E:     value_data = key_value->RY; break;
+		default : GUA_LOGE("input json value error!");
+		}
+		ret = cJSON_AddNumberToObject(p_value, pro_value_name[i], value_data); 
+		if (ret == NULL) {
+			GUA_LOGE("cjson add error!");
+		}
+    }
+	json_buf = cJSON_PrintUnformatted(p_root);
+	strcpy(json_str, json_buf);
+	GUA_LOGI("out json:%s", json_buf);
+	return REV_OK;
 }

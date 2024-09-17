@@ -35,7 +35,6 @@ typedef struct
 	uint8 set_usb_mode; // 设置控制模式开关
 } USB_OUT_CFG;
 
-esp_err_t init_app(void);
 void start_app(void);
 
 

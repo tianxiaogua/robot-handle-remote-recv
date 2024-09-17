@@ -4,8 +4,6 @@
 
 void app_main(void)
 {
-	init_app();
-
 	start_app();
 
 	while(1)

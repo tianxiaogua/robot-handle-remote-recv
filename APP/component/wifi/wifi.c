@@ -3,8 +3,9 @@
  *
  *  Created on: 2023年8月22日
  *      Author: tianxiaohua
+ *  参考： https://github.com/espressif/esp-idf/blob/3c99557eeea4e0945e77aabac672fbef52294d54/examples/wifi/scan/main/scan.c#L180
  */
-// 参考 https://www.jianshu.com/p/b312120fb686
+
 #include "driver_tool.h"
 #include "nvs.h"
 
@@ -27,16 +28,39 @@
 #include "wifi.h"
 #include "driver_tool.h"
 
-#define DEFAULT_WIFI_NAME "tianxiaohuawifi"
+#define DEFAULT_SCAN_LIST_SIZE 20
+
+#define DEFAULT_WIFI_SSID "tianxiaohuawifi"
 #define DEFAULT_WIFI_PASS "88888888"
+
+#define SOCKET_SERVER_IP "192.168.0.105"
+#define SOCKET_SERVER_PORT  1111
+
 #define WIFI_STATE_WAIT 0
 #define WIFI_STATE_FALE 1
 #define WIFI_STATE_SUCS 2
 
+WIFI_CFG g_wifi_config;
+TaskHandle_t Handle_wifi_task = NULL;
+
+
+static int wifi_state = WIFI_STATE_WAIT;
+
+static void set_wifi_connect_state(int state)
+{
+	wifi_state = state;
+}
+
+static int get_wifi_connect_state(void)
+{
+	return wifi_state;
+}
+
 /**
  * @brief 用于初始化nvs
  */
-void init_nvs() {
+static void init_nvs() 
+{
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -45,149 +69,176 @@ void init_nvs() {
     ESP_ERROR_CHECK(err);
 }
 
-/**
- * @brief WiFi 的事件循环Handler
- * @param arg
- * @param event_base
- * @param event_id
- * @param event_data
- */
-// https://blog.csdn.net/m0_50064262/article/details/119999907
-void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) 
+{
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-    	int temp_value = esp_wifi_connect();
-    	GUA_LOGI("begin to connect ：event_base:%d event_id:%d :%d", (int)event_base, (int)event_id, temp_value);
+    	GUA_LOGI("begin to connect :event_base:%d event_id:%d", (int)event_base, (int)event_id);
+		set_wifi_connect_state(WIFI_STATE_WAIT);
     }
 
     if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         GUA_LOGI("Got IP: " IPSTR,  IP2STR(&event->ip_info.ip));
-        GUA_LOGI("successful ！！！！！！event_base:%d event_id:%d", (int)event_base, (int)event_id);
+        GUA_LOGI("successful event_base:%d event_id:%d", (int)event_base, (int)event_id);
         set_wifi_connect_state(WIFI_STATE_SUCS);
     }
 
     if(event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-    	GUA_LOGE("Connect error ！！ event_base:%d event_id:%d", (int)event_base, (int)event_id);
+    	GUA_LOGE("Connect error event_base:%d event_id:%d", (int)event_base, (int)event_id);
 		set_wifi_connect_state(WIFI_STATE_FALE);
 	}
-    GUA_LOGI("event_base:%d event_id:%d", (int)event_base, (int)event_id);
 }
 
-void wifi_connect(wifi_config_t *wifi_config)
+
+static void wifi_init(void)
 {
-	set_wifi_connect_state(WIFI_STATE_WAIT);
-
-	ESP_LOGI("wifi_task", "wait to connect wifi\r\n");
-
-    init_nvs();
-
-    esp_netif_init();
-
-    esp_event_loop_create_default();
-    esp_netif_create_default_wifi_sta();
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    assert(sta_netif);
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    esp_wifi_init(&cfg);
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    GUA_LOGI("ssid:%s password:%s\r\n", wifi_config->sta.ssid, wifi_config->sta.password);
-    //  而直接将wifi_sta_config_t(或指针)转为wifi_config_t(或指针)是GCC的拓展语法，如下
-    esp_wifi_set_config(WIFI_IF_STA, wifi_config);
-
-    esp_wifi_set_mode(WIFI_MODE_STA);
-
-    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL);
-    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL, NULL);
-
-    esp_wifi_start();
+	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL);
+	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL, NULL);
+	
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
 }
 
 
-int wifi_state = WIFI_STATE_WAIT;
-void set_wifi_connect_state(int state)
+static int32 wifi_scan(char *target_ssid)
 {
-	wifi_state = state;
-}
+	uint16_t number = DEFAULT_SCAN_LIST_SIZE;
+	wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE];
+	uint16_t ap_count = 0;
+	memset(ap_info, 0, sizeof(ap_info));
 
-int get_wifi_connect_state(void)
-{
-	return wifi_state;
-}
+	esp_wifi_scan_start(NULL, true);
 
+	ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
+	ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
 
-
-void wifi_init(void)
-{
-	int temp_recv = 0;
-	wifi_config_t cfg_sta;
-	wifi_config_t _cfg_sta;
-
-	temp_recv = vns_read_wificfg(&cfg_sta); // 初始尝试读取flash上面的WiFi配置
-	if(temp_recv != ESP_OK){  // 如果没有读取到flash上面的WiFi配置
-		GUA_LOGI("no wifi config");
-		vns_save_wificfg(DEFAULT_WIFI_NAME, DEFAULT_WIFI_PASS);
+	GUA_LOGI("wifi_scan: total APs scanned = %u, actual AP number ap_info holds = %u find ssid:%s", ap_count, number, target_ssid);
+	for (int i = 0; i < number; i++) {
+		GUA_LOGI("SSID:%s   RSSI:%d", ap_info[i].ssid, ap_info[i].rssi);
+		if (strcmp((char *)ap_info[i].ssid, target_ssid) == 0) {
+			GUA_LOGI("get target ssid successful!");
+			return REV_OK;
+		}
 	}
-	else{ // 如果从flash中读取到了WiFi的配置信息
-		memcpy(&_cfg_sta.sta.ssid, &cfg_sta.sta.ssid, sizeof(cfg_sta.sta.ssid));
-		memcpy(&_cfg_sta.sta.password, &cfg_sta.sta.password, sizeof(cfg_sta.sta.password));
-		wifi_connect(&_cfg_sta);
-		while(1){
-			temp_recv = get_wifi_connect_state();
-			if (temp_recv == WIFI_STATE_SUCS) {
-				GUA_LOGI("wait to connect web server!!!!!");
-				break;
-			} else if (temp_recv == WIFI_STATE_WAIT) {
-				GUA_LOGW("just wait\r\n");
-			} else {
-				GUA_LOGE("no no no no no no !");
+	return REV_ERR;
+}
+
+
+static int32 wifi_connect(void)
+{
+	wifi_config_t wifi_config;
+	int32 ret = 0;
+
+	strcpy((char *)wifi_config.sta.ssid, DEFAULT_WIFI_SSID);
+	strcpy((char *)wifi_config.sta.password, DEFAULT_WIFI_PASS);
+
+	GUA_LOGI("ssid:%s password:%s", wifi_config.sta.ssid, wifi_config.sta.password);
+	esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+
+	ret = esp_wifi_connect();
+	if (ret == ESP_OK) {
+		GUA_LOGI("wifi connected ok! wifi ret =%d", ret);
+		return REV_OK;
+	} else {
+		GUA_LOGE("wifi connsct ret =%d", ret);
+		return REV_ERR;
+	}
+}
+
+
+
+static void sta_connect_wifi(void * pvParameters)
+{
+	int32 ret = 0;
+	int32 tcp_status = 0;
+
+	init_nvs();
+	wifi_init();
+	while (1) {
+		while (1) {
+			ret = wifi_scan(DEFAULT_WIFI_SSID);
+			if (ret == REV_OK) {
+				ret = wifi_connect();
+				if (ret == REV_OK) {
+					break;
+				} 
+				delay_ms(2000); // 尝试两次
+				ret = wifi_connect();
+				if (ret == REV_OK) {
+					break;
+				}
 			}
-			delay_ms(1000);
+			delay_ms(100);
+		}
+
+		while (1) {
+			ret = get_wifi_connect_state();
+			if (ret == WIFI_STATE_SUCS) {
+				if (tcp_status == 0) {
+					ret = g_wifi_config.event_handle_callback(WIFI_CONNECTED);
+					if (ret == REV_OK) {
+						tcp_status = 1;
+					}
+				}
+				ret = g_wifi_config.event_handle_callback(WIFI_TCP_RECV_DATA);
+				if (ret == REV_ERR) { // TCP断开了重新连接TCP
+					g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
+					tcp_status = 0;
+				}
+				delay_ms(10);
+			} else if (ret == WIFI_STATE_WAIT) {
+				GUA_LOGW("wifi just wait connect...");
+				delay_ms(1000);
+			} else {
+				GUA_LOGE("wifi disconnected!");
+				g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
+				break;
+			}
 		}
 	}
 }
 
 
-#define SOCKET_SERVER_IP "192.168.0.105"
-#define SOCKET_SERVER_PORT  1111
-#define TCP_PORT             3333                // TCP服务器端口号
-#define PORT TCP_PORT
 
-void tcp_client_handle(void)
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static int32 tcp_client_handle(void)
 {
-    int sockfd = -1;    /* 定义一个socket描述符，用来接收打开的socket */
     int ret = -1;
-    /* 打开一个socket套接字 */
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (sockfd < 0) {
-		GUA_LOGE("socket open failure ! sockfd:%d \n", sockfd);
-		return ;
-	} else {
-        struct sockaddr_in seraddr = {0};
-        seraddr.sin_family = AF_INET;		                    /* 设置地址族为IPv4 */
-	    seraddr.sin_port = htons(SOCKET_SERVER_PORT);	                    /* 设置地址的端口号信息 */
-	    seraddr.sin_addr.s_addr = inet_addr(SOCKET_SERVER_IP);	/*　设置IP地址 */
-	    ret = connect(sockfd, (const struct sockaddr *)&seraddr, sizeof(seraddr));
-        if(ret < 0) {
-        	GUA_LOGE("connect to server failure !!! ret = %d \n",ret);
-        } else {
-        	GUA_LOGI("connect success.\n");
-            int cnt = 10;
-            while(cnt--) {
-                ret = send(sockfd, "I am ESP32.", strlen("I am ESP32."), 0);
-                if(ret < 0) {
-                	GUA_LOGE("send err. \n");
-                } else {
-                	GUA_LOGI("send ok. \n");
-                }
-                delay_ms(200);
-            }
-        }
-        close(sockfd);
-    }
+    GUA_LOGI("socket tcp connect to server ...");
+    /* 打开一个socket套接字 */
+    g_wifi_config.tcp_socket_client_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (g_wifi_config.tcp_socket_client_fd < 0) {
+		GUA_LOGE("socket open failure ! sockfd:%d", g_wifi_config.tcp_socket_client_fd);
+		return REV_ERR;
+	}
+	
+	struct sockaddr_in seraddr = {0};
+	seraddr.sin_family = AF_INET;		                    /* 设置地址族为IPv4 */
+	seraddr.sin_port = htons(SOCKET_SERVER_PORT);	        /* 设置地址的端口号信息 */
+	seraddr.sin_addr.s_addr = inet_addr(SOCKET_SERVER_IP);	/*　设置IP地址 */
+	ret = connect(g_wifi_config.tcp_socket_client_fd, (const struct sockaddr *)&seraddr, sizeof(seraddr));
+	if(ret < 0) {
+		GUA_LOGE("connect to server failure ! ret = %d",ret);
+		return REV_ERR;
+	}
+	GUA_LOGI("tcp client connect success!\n");
+
+	return REV_OK;
 }
 
 
-void tcp_init_server(void)
+static void tcp_init_server(void)
 {
 	int addr_family = AF_INET;
 	int ip_protocol = IPPROTO_IP;
@@ -203,7 +254,7 @@ void tcp_init_server(void)
 	// 2.配置服务器信息
 	dest_addr.sin_family = AF_INET;
 	dest_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	dest_addr.sin_port = htons(TCP_PORT);
+	dest_addr.sin_port = htons(SOCKET_SERVER_PORT);
 
 	// 3.绑定地址
 	int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
@@ -267,4 +318,110 @@ void tcp_init_server(void)
 		}
 		delay_ms(10);
 	}
+}
+
+/////////////////////////////////////外部接口////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief 初始化wifi
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_init_sta(void)
+{
+	GUA_LOGI("start wifi task");
+	// 创建wifi task控制任务
+	xTaskCreatePinnedToCore(sta_connect_wifi,            //任务函数
+							"wifi_task",          //任务名称
+							4096+2048,                //堆栈大小
+							NULL,                //传递参数
+							1,                   //任务优先级
+							&Handle_wifi_task,    //任务句柄
+							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
+	return REV_OK;
+}
+
+/**
+ * @brief 创建socket的server端
+ *
+ * @return int32
+ */
+int32 cmp_wifi_tcp_server_init(void)
+{
+	tcp_init_server();
+	return REV_OK;
+}
+
+int32 cmp_wifi_tcp_client_init()
+{
+	return tcp_client_handle();
+}
+
+/**
+ * @brief socket的client端注销
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_tcp_client_deinit(void)
+{
+	GUA_LOGW("disconnect tcp");
+	return close(g_wifi_config.tcp_socket_client_fd);
+}
+
+
+/**
+ * @brief 注册接收回调函数
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_event_handle_register(cmp_wifi_event_handle_callback fun_cb)
+{
+	if (fun_cb == NULL) {
+		GUA_LOGE("wifi event register function is NULL!");
+		return REV_ERR;
+	}
+	g_wifi_config.event_handle_callback = fun_cb;
+	return REV_OK;
+}
+
+/**
+ * @brief 通过网络发送数据
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_send_data(uint8 *buf, uint32 buf_len)
+{	
+	int32 ret = 0;
+	ret = send(g_wifi_config.tcp_socket_client_fd, buf, buf_len, 0);
+	if(ret < 0) {
+		GUA_LOGE("send err. \n");
+		ret = REV_ERR;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief 接受网络数据
+ * 
+ * @param buf 接受数据
+ * @param buf_len 接受数据buf长度
+ * @return int32 接收到的数据长度
+ */
+int32 cmp_wifi_recv_data(uint8 *buf, uint32 buf_len)
+{
+	int32 len = 0;
+
+	len = recv(g_wifi_config.tcp_socket_client_fd, buf, buf_len, 0);  // 读取接收数据
+	if(len < 0) { // 没有数据
+
+	} else if (len == 0) {
+		GUA_LOGW("Connection closed");
+		return REV_ERR;
+	} else {
+		GUA_LOGI("Received %d bytes: %s", len, buf);
+		return len;
+	}
+
+	return REV_ERR;
 }

@@ -14,6 +14,7 @@
 #define SOCKET_RECV_BUF_LEN 512
 
 typedef void (*cmp_softAP_recv_data_callback)(uint8 *recv_buffer, uint32 recv_len); // 用于在接收到数据时处理
+
 typedef struct 
 {
     /* data */
@@ -36,7 +37,7 @@ int32 cmp_softAP_init(void);
  * 
  * @return int32 
  */
-int32 cmp_softAP_bulid_tcp_server(void);
+int32 cmp_softAP_tcp_init_server(void);
 
 /**
  * @brief 创建基于AP模式下的socket的client端
@@ -57,6 +58,6 @@ void cmp_softAP_register_recv(cmp_softAP_recv_data_callback fun_cb);
  * 
  * @return int32 
  */
-int32 cmp_softAP_send_data(uint8 *buf, uint32 buf_len);
+int32 cmp_softAP_tcp_send_data(uint8 *buf, uint32 buf_len);
 
 #endif

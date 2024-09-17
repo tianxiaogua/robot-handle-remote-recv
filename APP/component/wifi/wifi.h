@@ -1,31 +1,75 @@
-/*
- * wifi.h
- *
- *  Created on: 2023年8月22日
- *      Author: tianxiaohua
- */
-
 #ifndef APP_WIFI_WIFI_H_
 #define APP_WIFI_WIFI_H_
 
-#include <nvs_flash.h>
-#include <esp_event.h>
-#include <esp_wifi.h>
-#include <esp_log.h>
-#include <esp_netif.h>
-#include <esp_netif_ip_addr.h>
 
-#include "lwip/err.h"
-#include "lwip/sockets.h"
-#include "lwip/sys.h"
-#include <lwip/netdb.h>
+#include "main_app.h"
+#include "driver_tool.h"
+
+enum wifi_config_e
+{
+    WIFI_CONNECTED = 0,
+    WIFI_TCP_RECV_DATA,
+	WIFI_TCP_DISCONNECTED
+};
+
+typedef int32 (*cmp_wifi_event_handle_callback)(int32 evint_handle); // 事件处理
+
+typedef struct 
+{
+	int32 tcp_socket_client_fd;
+    cmp_wifi_event_handle_callback event_handle_callback;
+} WIFI_CFG;
 
 
-void wifi_connect(wifi_config_t *wifi_config);
-void set_wifi_connect_state(int state);
-int get_wifi_connect_state(void);
+/**
+ * @brief 初始化wifi
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_init_sta(void);
 
-void tcp_client_handle(void);
-void tcp_init_server(void);
+/**
+ * @brief 创建socket的server端
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_tcp_server_init(void);
+
+/**
+ * @brief socket的client端
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_tcp_client_init(void);
+
+/**
+ * @brief socket的client端注销
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_tcp_client_deinit(void);
+
+/**
+ * @brief 注册接收回调函数
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_event_handle_register(cmp_wifi_event_handle_callback fun_cb);
+
+/**
+ * @brief 通过网络发送数据
+ * 
+ * @return int32 
+ */
+int32 cmp_wifi_send_data(uint8 *buf, uint32 buf_len);
+
+/**
+ * @brief 接受网络数据
+ * 
+ * @param buf 接受数据
+ * @param buf_len 接受数据buf长度
+ * @return int32 接收到的数据长度
+ */
+int32 cmp_wifi_recv_data(uint8 *buf, uint32 buf_len);
 
 #endif /* APP_WIFI_WIFI_H_ */

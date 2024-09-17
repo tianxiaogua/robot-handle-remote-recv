@@ -240,7 +240,7 @@ int32 cmp_softAP_init(void)
  * 
  * @return int32 
  */
-int32 cmp_softAP_bulid_tcp_server(void)
+int32 cmp_softAP_tcp_init_server(void)
 {
     int32 ret = REV_OK;
     // 创建任务
@@ -259,7 +259,7 @@ int32 cmp_softAP_bulid_tcp_server(void)
  * 
  * @return int32 
  */
-void cmp_softAP_register_recv(cmp_softAP_recv_data_callback fun_cb)
+void cmp_softAP_tcp_register_recv(cmp_softAP_recv_data_callback fun_cb)
 {
     g_softAP_config.recv_data_callback = fun_cb;
 }
@@ -269,7 +269,7 @@ void cmp_softAP_register_recv(cmp_softAP_recv_data_callback fun_cb)
  * 
  * @return int32 
  */
-int32 cmp_softAP_send_data(uint8 *buf, uint32 buf_len)
+int32 cmp_softAP_tcp_send_data(uint8 *buf, uint32 buf_len)
 {
     int32 ret = 0;
     ret = tcp_send_data(buf, buf_len);
