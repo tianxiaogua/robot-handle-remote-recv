@@ -6,6 +6,8 @@ file(GLOB_RECURSE SOURCES
 	../APP/component/wifi/wifi.c
 	../APP/component/nvs/nvs.c 
 	../APP/component/softAP/softAP.c 
+	../APP/component/usb/usb.c 
+	../APP/component/keyScan/keyscan.c 
 )
  
 set(inc
@@ -16,8 +18,10 @@ set(inc
 ../APP/component/wifi
 ../APP/component/nvs 
 ../APP/component/softAP
+../APP/component/usb
+../APP/component/keyScan
 )
- 
+
 idf_component_register(
 	SRCS ${SOURCES} 
 	INCLUDE_DIRS ${inc}

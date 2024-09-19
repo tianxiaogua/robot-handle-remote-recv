@@ -19,6 +19,8 @@
 #include "esp_chip_info.h"
 #include "esp_log.h"
 
+#include <string.h>
+
 #include "driver_gpio.h"
 #include "driver_tool.h"
 #include "driver_spi.h"

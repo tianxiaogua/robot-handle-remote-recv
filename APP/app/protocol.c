@@ -126,7 +126,7 @@ static int32 protocol_decode_value_int_data(cJSON *p_value, char *name)
         return REV_ERR;
     } else {
         if (cJSON_IsNumber(p_value_data)) {
-            GUA_LOGI("p_value_data: %d", p_value_data->valueint);
+//            GUA_LOGI("p_value_data: %d", p_value_data->valueint);
             return p_value_data->valueint;
         }
     }
@@ -191,7 +191,7 @@ int32 protocol_decode(const char *json_str, KEY_DETECTION *key_value)
     if (!p_json_root) {
         GUA_LOGE("input str is not json!");
     }
-    GUA_LOGI("get json data:%s", json_str);
+//    GUA_LOGI("get json data:%s", json_str);
 
     char protocol_head[32] = {0};
     p_head = cJSON_GetObjectItem(p_json_root, PRO_HEAD);    // 解析mac字段字符串内容
