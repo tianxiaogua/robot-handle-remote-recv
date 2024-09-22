@@ -12,7 +12,8 @@
 #define PORT 3333
 
 #define SOCKET_RECV_BUF_LEN 512
-
+#define CMP_SOFTAP_TCP_CONNECTED 1
+#define CMP_SOFTAP_TCP_DISCONNECTED 2
 typedef void (*cmp_softAP_recv_data_callback)(uint8 *recv_buffer, uint32 recv_len); // 用于在接收到数据时处理
 
 typedef struct 
@@ -22,6 +23,7 @@ typedef struct
     uint32 recv_len;
     uint8 recv_buffer[SOCKET_RECV_BUF_LEN];
     int32 socket_client_fd;
+    int32 socket_UDP_fd;
 }SOFTAP_CFG;
 
 
@@ -37,7 +39,7 @@ int32 cmp_softAP_init(void);
  * 
  * @return int32 
  */
-int32 cmp_softAP_tcp_init_server(void);
+int32 cmp_softAP_init_server(void);
 
 /**
  * @brief 创建基于AP模式下的socket的client端
@@ -51,13 +53,20 @@ int32 cmp_softAP_tcp_init_server(void);
  * 
  * @return int32 
  */
-void cmp_softAP_tcp_register_recv(cmp_softAP_recv_data_callback fun_cb);
+void cmp_softAP_register_recv(cmp_softAP_recv_data_callback fun_cb);
 
 /**
  * @brief 通过网络发送数据
  * 
  * @return int32 
  */
-int32 cmp_softAP_tcp_send_data(uint8 *buf, uint32 buf_len);
+int32 cmp_softAP_send_data(uint8 *buf, uint32 buf_len);
+
+/**
+ * @brief 获取连接状态
+ * 
+ * @return int32 
+ */
+int32 cmp_softAP_get_connect_status(void);
 
 #endif

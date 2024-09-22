@@ -30,19 +30,25 @@
 
 #define DEFAULT_SCAN_LIST_SIZE 20
 
-#define DEFAULT_WIFI_SSID "tianxiaohuawifi"
-#define DEFAULT_WIFI_PASS "88888888"
+#define DEFAULT_WIFI_SSID "ESP32_TEST"
+#define DEFAULT_WIFI_PASS "12345678"
 
-#define SOCKET_SERVER_IP "192.168.0.105"
-#define SOCKET_SERVER_PORT  1111
+#define SOCKET_SERVER_IP "192.168.4.1"
+#define SOCKET_SERVER_PORT  3333
 
 #define WIFI_STATE_WAIT 0
 #define WIFI_STATE_FALE 1
 #define WIFI_STATE_SUCS 2
 
+enum SOCKET_TPYE
+{
+	SOCKET_UPD = 1,
+	SOCKET_TCP
+};
+
 WIFI_CFG g_wifi_config;
 TaskHandle_t Handle_wifi_task = NULL;
-
+static struct sockaddr_in udp_client_addr;                  //client地址
 
 static int wifi_state = WIFI_STATE_WAIT;
 
@@ -99,7 +105,8 @@ static void wifi_init(void)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
+	esp_wifi_set_ps (WIFI_PS_NONE); // 关闭WiFi低功耗 否则将会造成至少50ms以上的延时
+	
 	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL);
 	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL, NULL);
 	
@@ -153,12 +160,53 @@ static int32 wifi_connect(void)
 	}
 }
 
+static int32 sta_wifi_tcp_client_event(int32 tcp_status)
+{
+	int32 ret = 0;
+
+	if (tcp_status == 0) {
+		ret = g_wifi_config.event_handle_callback(WIFI_CONNECTED);
+		if (ret == REV_OK) {
+			tcp_status = 1;
+		}
+	}
+
+	ret = g_wifi_config.event_handle_callback(WIFI_TCP_RECV_DATA);
+	if (ret == REV_ERR) { // TCP断开了重新连接TCP
+		g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
+		tcp_status = 0;
+	}
+
+	return tcp_status;
+}
+
+
+static int32 sta_wifi_udp_client_event(int32 tcp_status)
+{
+	int32 ret = 0;
+
+	if (tcp_status == 0) {
+		ret = g_wifi_config.event_handle_callback(WIFI_CONNECTED);
+		if (ret == REV_OK) {
+			tcp_status = 1;
+		}
+	}
+
+	ret = g_wifi_config.event_handle_callback(WIFI_TCP_RECV_DATA);
+	if (ret == REV_ERR) { // TCP断开了重新连接TCP
+		g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
+		tcp_status = 0;
+	}
+
+	return tcp_status;
+}
 
 
 static void sta_connect_wifi(void * pvParameters)
 {
 	int32 ret = 0;
 	int32 tcp_status = 0;
+	g_wifi_config.type = (int) pvParameters;
 
 	init_nvs();
 	wifi_init();
@@ -178,22 +226,15 @@ static void sta_connect_wifi(void * pvParameters)
 			}
 			delay_ms(100);
 		}
-
+		GUA_LOGI("wifi conneced wait to connect socket...");
 		while (1) {
 			ret = get_wifi_connect_state();
 			if (ret == WIFI_STATE_SUCS) {
-				if (tcp_status == 0) {
-					ret = g_wifi_config.event_handle_callback(WIFI_CONNECTED);
-					if (ret == REV_OK) {
-						tcp_status = 1;
-					}
+				if (g_wifi_config.type == SOCKET_UPD) {
+					tcp_status = sta_wifi_tcp_client_event(tcp_status); // TCP 事件处理
+				} else {
+					tcp_status = sta_wifi_udp_client_event(tcp_status); // UDP 事件处理
 				}
-				ret = g_wifi_config.event_handle_callback(WIFI_TCP_RECV_DATA);
-				if (ret == REV_ERR) { // TCP断开了重新连接TCP
-					g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
-					tcp_status = 0;
-				}
-				delay_ms(10);
 			} else if (ret == WIFI_STATE_WAIT) {
 				GUA_LOGW("wifi just wait connect...");
 				delay_ms(1000);
@@ -209,7 +250,34 @@ static void sta_connect_wifi(void * pvParameters)
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static int32 tcp_client_recv_data(uint8 *buf, uint32 buf_len)
+{
+	int32 len = 0;
 
+	len = recv(g_wifi_config.tcp_socket_client_fd, buf, buf_len, 0);  // 读取接收数据
+	if(len < 0) { // 没有数据
+
+	} else if (len == 0) {
+		GUA_LOGW("Connection closed");
+		return REV_ERR;
+	} else {
+		GUA_LOGI("Received %d bytes: %s", len, buf);
+		return len;
+	}
+	return REV_ERR;
+}
+
+static int32 tcp_client_send_data(uint8 *buf, uint32 buf_len)
+{
+	int32 ret = 0;
+
+	ret = send(g_wifi_config.tcp_socket_client_fd, buf, buf_len, 0);
+	if(ret < 0) {
+		GUA_LOGE("send err. \n");
+		ret = REV_ERR;
+	}
+	return ret;
+}
 
 static int32 tcp_client_handle(void)
 {
@@ -320,6 +388,74 @@ static void tcp_init_server(void)
 	}
 }
 
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static int32 udp_client_recv_data(uint8_t *data_buf, uint32 data_len)
+{
+    int len = 0;            //长度
+    //创建udp客户端
+    socklen_t udpsocklen = sizeof(udp_client_addr);      //地址长度
+	//读取接收数据
+	len = recvfrom(g_wifi_config.udp_client_fd, data_buf, data_len, 0, (struct sockaddr *) &udp_client_addr, &udpsocklen);
+	if (len > 0) {
+		return len;
+	} else {
+		//断开连接
+		GUA_LOGE("udp client connect error!");
+		return REV_ERR;
+	}
+	GUA_LOGE("udp client connect error!");
+
+	return REV_ERR;
+}
+
+
+static int32 udp_client_send_data(uint8_t *data_buf, uint32 data_len)
+{
+	int len = 0;            //长度
+	unsigned int udpsocklen = sizeof(udp_client_addr);      //地址长度
+	//测试udp server,返回发送成功的长度
+	len = sendto(g_wifi_config.udp_client_fd, data_buf, data_len, 0, (struct sockaddr *) &udp_client_addr, udpsocklen);
+	if (len > 0) {
+		return ESP_OK;
+	} else {
+		GUA_LOGE("udp client send error!");
+		return ESP_FAIL;
+	}
+	GUA_LOGE("udp client send error!");
+
+	return ESP_OK;
+}
+
+
+static int32 init_udp_client_handle(void)
+{
+	g_wifi_config.udp_client_fd = -1;
+
+	//新建socket
+	g_wifi_config.udp_client_fd = socket(AF_INET, SOCK_DGRAM, 0);                         /*参数和TCP不同*/
+	if (g_wifi_config.udp_client_fd < 0) {
+		//新建失败后，关闭新建的socket，等待下次新建
+		close(g_wifi_config.udp_client_fd);
+		GUA_LOGE("udp client init error!");
+		return ESP_FAIL;
+	}
+
+	//配置连接服务器信息
+	udp_client_addr.sin_family = AF_INET;
+	udp_client_addr.sin_port = htons(SOCKET_SERVER_PORT);
+	udp_client_addr.sin_addr.s_addr = inet_addr(SOCKET_SERVER_IP);
+	GUA_LOGI("udp client init ok");
+	
+	uint8 buf[] = "connected\n";
+	udp_client_send_data(buf, sizeof(buf));
+
+	return ESP_OK;
+}
+
+
+
 /////////////////////////////////////外部接口////////////////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -334,7 +470,7 @@ int32 cmp_wifi_init_sta(void)
 	xTaskCreatePinnedToCore(sta_connect_wifi,            //任务函数
 							"wifi_task",          //任务名称
 							4096+2048,                //堆栈大小
-							NULL,                //传递参数
+							(void *)SOCKET_UPD,                //传递参数
 							1,                   //任务优先级
 							&Handle_wifi_task,    //任务句柄
 							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
@@ -352,9 +488,15 @@ int32 cmp_wifi_tcp_server_init(void)
 	return REV_OK;
 }
 
-int32 cmp_wifi_tcp_client_init()
+int32 cmp_wifi_socket_client_init(void)
 {
-	return tcp_client_handle();
+	if (g_wifi_config.type == SOCKET_UPD) {
+		return init_udp_client_handle();
+	}
+	if (g_wifi_config.type == SOCKET_TCP) {
+		return tcp_client_handle();
+	}
+	return REV_ERR;
 }
 
 /**
@@ -392,12 +534,13 @@ int32 cmp_wifi_event_handle_register(cmp_wifi_event_handle_callback fun_cb)
 int32 cmp_wifi_send_data(uint8 *buf, uint32 buf_len)
 {	
 	int32 ret = 0;
-	ret = send(g_wifi_config.tcp_socket_client_fd, buf, buf_len, 0);
-	if(ret < 0) {
-		GUA_LOGE("send err. \n");
-		ret = REV_ERR;
-	}
+	
+	if (g_wifi_config.type == SOCKET_UPD) {
+		ret = udp_client_send_data(buf, buf_len);
 
+	} else {
+		ret = tcp_client_send_data(buf, buf_len);
+	}
 	return ret;
 }
 
@@ -410,17 +553,10 @@ int32 cmp_wifi_send_data(uint8 *buf, uint32 buf_len)
  */
 int32 cmp_wifi_recv_data(uint8 *buf, uint32 buf_len)
 {
-	int32 len = 0;
-
-	len = recv(g_wifi_config.tcp_socket_client_fd, buf, buf_len, 0);  // 读取接收数据
-	if(len < 0) { // 没有数据
-
-	} else if (len == 0) {
-		GUA_LOGW("Connection closed");
-		return REV_ERR;
+	if (g_wifi_config.type == SOCKET_UPD) {
+		return udp_client_recv_data(buf, buf_len);
 	} else {
-		GUA_LOGI("Received %d bytes: %s", len, buf);
-		return len;
+		return tcp_client_recv_data(buf, buf_len);
 	}
 
 	return REV_ERR;

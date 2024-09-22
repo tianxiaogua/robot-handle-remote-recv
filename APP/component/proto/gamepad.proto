@@ -1,0 +1,43 @@
+// https://blog.csdn.net/qq_44179528/article/details/127388599
+// 执行指令生成源文件和可执行文件 
+// protoc --nanopb_out=. gamepad.proto
+
+syntax = "proto3";
+
+package GAMEPAD;
+
+enum KEY_MODE {
+    BUTTON_UP = 0;   // 按钮按下 button down
+    BUTTON_DOWN = 1; // 按钮按下 button down
+}
+
+message KEY_VALUE {
+    KEY_MODE KEY_CHA = 1; 
+
+    KEY_MODE KEY_LEFT = 2;
+    KEY_MODE KEY_RIGHT = 3;
+    KEY_MODE KEY_UP_ = 4;
+    KEY_MODE KEY_DOWN_ = 5;
+
+    KEY_MODE KEY_A = 6;
+    KEY_MODE KEY_B = 7;
+    KEY_MODE KEY_X = 8;
+    KEY_MODE KEY_Y = 9;
+
+    KEY_MODE KEY_LB = 10;
+    KEY_MODE KEY_RB = 11;
+
+    KEY_MODE KEY_SELECT = 12;
+    KEY_MODE KEY_START = 13;
+
+    KEY_MODE KEY_R_KEY = 14;
+    KEY_MODE KEY_L_KEY = 15;
+
+    int64 LX = 16;
+    int64 LY = 17;
+    int64 RX = 18;
+    int64 RY = 19;
+
+    int64 LT = 20;
+    int64 RT = 21;
+}

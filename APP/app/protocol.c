@@ -33,6 +33,10 @@
 #include "protocol.h"
 #include "cJSON.h"
 #include "driver_tool.h"
+#include "gamepad.pb.h"
+#include "pb_common.h"
+#include "pb_decode.h"
+#include "pb_encode.h"
 
 #define GAMEPAD_PROTOCOL_V1 "H3.1S1.0"
 
@@ -56,6 +60,10 @@
 #define PRO_VALUE_LY      "LY"
 #define PRO_VALUE_RX      "RX"
 #define PRO_VALUE_RY      "RY"
+
+// {"hd":"H3.1S1.0","v":{"U":1,"D":0,"L":0,"R":0,"A":1,"B":0,"X":0,"Y":0,"LB":0,"RB":0,"ST":0,"SE":0,"RK":0,"LK":0,"LX":127,"LY":127,"RX":127,"RY":127}}
+// {"hd":"H3.1S1.0","v":{"U":1,"D":0,"L":0,"R":0,"A":1,"B":0,"X":0,"Y":0,"LB":0,"RB":0,"ST":0,"SE":0,"RK":0,"LK":0,"LX":127,"LY":127,"RX":127,"RY":127}}
+
 
 enum PRO_NAME
 {
@@ -180,7 +188,7 @@ static int32 protocol_decode_value(cJSON *root, KEY_DETECTION *key_value)
  * @param key_value 输出的解析好的数据
  * @return int32 
  */
-int32 protocol_decode(const char *json_str, KEY_DETECTION *key_value)
+int32 protocol_decode_json(const char *json_str, KEY_DETECTION *key_value)
 {
     cJSON *p_json_root; // 根节点
     cJSON *p_head;
@@ -227,7 +235,7 @@ int32 protocol_decode(const char *json_str, KEY_DETECTION *key_value)
  * @param key_value 输入的要编码的数据
  * @return int32 
  */
-int32 protocol_encode(char *json_str, KEY_DETECTION *key_value)
+int32 protocol_encode_json(char *json_str, KEY_DETECTION *key_value)
 {
 	cJSON *p_root;
 	cJSON *p_value;
@@ -286,6 +294,124 @@ int32 protocol_encode(char *json_str, KEY_DETECTION *key_value)
 
 
 	printf("free_heap_size = %ld\n", esp_get_free_heap_size());
+
+	return REV_OK;
+}
+
+
+/**
+ * @brief 将输入数据编码成为protoc数据格式
+ * 
+ * @param key_value 输入的键值
+ * @param buf 输出的数据
+ * @param buf_len 输出的数据长度
+ * @return int32 
+ */
+int32 app_protocol_encode_protoc(KEY_DETECTION *key_value, uint8 *buf, uint32 buf_len)
+{
+	int32 ret = 0;
+	GAMEPAD_KEY_VALUE gamepad_value = {0};
+	pb_ostream_t o_stream = {0};
+
+	// 组包
+	if (key_value->KEY_A == BUTTON_UP) gamepad_value.KEY_A = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_A = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_B == BUTTON_UP) gamepad_value.KEY_B = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_B = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_X == BUTTON_UP) gamepad_value.KEY_X = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_X = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_Y == BUTTON_UP) gamepad_value.KEY_Y = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_Y = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+
+	if (key_value->KEY_UP_ == BUTTON_UP) gamepad_value.KEY_UP_ = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_UP_ = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_DOWN_ == BUTTON_UP) gamepad_value.KEY_DOWN_ = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_DOWN_ = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_LEFT == BUTTON_UP) gamepad_value.KEY_LEFT = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_LEFT = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_RIGHT == BUTTON_UP) gamepad_value.KEY_RIGHT = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_RIGHT = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+
+	if (key_value->KEY_L_KEY == BUTTON_UP) gamepad_value.KEY_L_KEY = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_L_KEY = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_R_KEY == BUTTON_UP) gamepad_value.KEY_R_KEY = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_R_KEY = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+
+	if (key_value->KEY_LB == BUTTON_UP) gamepad_value.KEY_LB = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_LB = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_RB == BUTTON_UP) gamepad_value.KEY_RB = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_RB = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+
+	if (key_value->KEY_SELECT == BUTTON_UP) gamepad_value.KEY_SELECT = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_SELECT = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	if (key_value->KEY_START == BUTTON_UP) gamepad_value.KEY_START = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_START = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+
+	if (key_value->KEY_CHA == BUTTON_UP) gamepad_value.KEY_CHA = GAMEPAD_KEY_MODE_BUTTON_UP;
+	else gamepad_value.KEY_CHA = GAMEPAD_KEY_MODE_BUTTON_DOWN;
+	
+	gamepad_value.LX = key_value->LX;
+	gamepad_value.LY = key_value->LY;
+	gamepad_value.RX = key_value->RX;
+	gamepad_value.RY = key_value->RY;
+	
+	o_stream = pb_ostream_from_buffer(buf, buf_len);
+	ret = pb_encode(&o_stream, GAMEPAD_KEY_VALUE_fields, &gamepad_value);
+	if (ret != true) {
+		GUA_LOGE("encode error!");
+		return REV_ERR;
+	}
+//	GUA_LOGI("%d", o_stream.bytes_written);
+	return REV_OK;
+}
+
+/**
+ * @brief 将输入的编码数据解码成为数据输出
+ * 
+ * @param buf 输出数据
+ * @param buf_len 输出数据长度
+ * @param key_value 输入键值
+ * @return int32 
+ */
+int32 app_protocol_decode_protoc(uint8 *buf, uint32 buf_len, KEY_DETECTION *key_value)
+{
+	int32 ret = 0;
+	GAMEPAD_KEY_VALUE gamepad_value = {0};
+	pb_istream_t i_stream = {0};
+
+	// 将数据进行解包
+	i_stream = pb_istream_from_buffer(buf, buf_len);
+	ret = pb_decode(&i_stream, GAMEPAD_KEY_VALUE_fields, &gamepad_value);
+	if (ret == false) {
+//		GUA_LOGE("decode error! %d", ret);
+//		return REV_ERR;
+	}
+
+	key_value->KEY_A = gamepad_value.KEY_A;
+	key_value->KEY_B = gamepad_value.KEY_B;
+	key_value->KEY_X = gamepad_value.KEY_X;
+	key_value->KEY_Y = gamepad_value.KEY_Y;
+
+	key_value->KEY_UP_ = gamepad_value.KEY_UP_;
+	key_value->KEY_DOWN_ = gamepad_value.KEY_DOWN_;
+	key_value->KEY_LEFT = gamepad_value.KEY_LEFT;
+	key_value->KEY_RIGHT = gamepad_value.KEY_RIGHT;
+
+	key_value->KEY_L_KEY = gamepad_value.KEY_L_KEY;
+	key_value->KEY_R_KEY = gamepad_value.KEY_R_KEY;
+
+	key_value->KEY_LB = gamepad_value.KEY_LB;
+	key_value->KEY_RB = gamepad_value.KEY_RB;
+
+	key_value->KEY_SELECT = gamepad_value.KEY_SELECT;
+	key_value->KEY_START = gamepad_value.KEY_START;
+
+	key_value->KEY_CHA = gamepad_value.KEY_CHA;
+
+	key_value->LX = gamepad_value.LX;
+	key_value->LY = gamepad_value.LY;
+	key_value->RX = gamepad_value.RX;
+	key_value->RY = gamepad_value.RY;
 
 	return REV_OK;
 }

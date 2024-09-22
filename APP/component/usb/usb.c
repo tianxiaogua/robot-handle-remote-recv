@@ -114,9 +114,21 @@ int32 cmp_usb_init_gamepad(void)
 							"usb_task",          //任务名称
 							4096,                //堆栈大小
 							NULL,                //传递参数
-							2,                   //任务优先级
+							3,                   //任务优先级
 							&Handle_usb_task,    //任务句柄
 							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
+#ifdef DEBUG_TEST
+	while (1) {
+		delay_ms(1000);
+		g_gamepad_key.KEY_A = BUTTON_DOWN;
+		cmp_keyscan_dispose_gamepad_key(&g_gamepad_key, &g_tinyusb_button_data);
+		cmp_usb_gamepad_send(&g_tinyusb_button_data);
+		delay_ms(1000);
+		g_gamepad_key.KEY_A = BUTTON_UP;
+		cmp_keyscan_dispose_gamepad_key(&g_gamepad_key, &g_tinyusb_button_data);
+		cmp_usb_gamepad_send(&g_tinyusb_button_data);
+	}
+#endif
 	return REV_OK;
 }
 
@@ -133,7 +145,7 @@ int32 cmp_usb_gamepad_send(TINYUSB_BUTTON *button)
 				button->hat,
 				button->buttons);
 	} else {
-		GUA_LOGI("wait usb\n");
+//		GUA_LOGI("wait usb\n");
 	}
 	return REV_OK;
 }

@@ -10,7 +10,8 @@ file(GLOB_RECURSE SOURCES
 	../APP/component/keyScan/keyscan.c 
 	../APP/component/LCD/*.c
 	../APP/component/PCA9557/*.c
-	../APPcomponent//MPU6050/*.c
+	../APP/component/MPU6050/*.c
+	../APP/component/proto/*.c
 )
  
 set(inc
@@ -26,6 +27,7 @@ set(inc
 ../APP/component/LCD
 ../APP/component/PCA9557
 ../APP/component/MPU6050
+../APP/component/proto
 )
  
 idf_component_register(

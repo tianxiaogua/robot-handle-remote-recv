@@ -4,8 +4,9 @@
 #include "main_app.h"
 #include "usb.h"
 
-#define BUTTON_DOWN 1 // 按钮按下 button down
+
 #define BUTTON_UP 0 // 按钮按下 button down
+#define BUTTON_DOWN 1 // 按钮按下 button down
 
 typedef struct key_detection {
 	uint8 KEY_CHA;

@@ -18,6 +18,8 @@ typedef struct
 {
 	int32 tcp_socket_client_fd;
     cmp_wifi_event_handle_callback event_handle_callback;
+    int32 udp_client_fd;
+    int32 type;
 } WIFI_CFG;
 
 
@@ -36,11 +38,11 @@ int32 cmp_wifi_init_sta(void);
 int32 cmp_wifi_tcp_server_init(void);
 
 /**
- * @brief socket的client端
+ * @brief socket的client端初始化    
  * 
  * @return int32 
  */
-int32 cmp_wifi_tcp_client_init(void);
+int32 cmp_wifi_socket_client_init(void);
 
 /**
  * @brief socket的client端注销

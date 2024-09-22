@@ -14,6 +14,8 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include <sys/socket.h>
+#include <fcntl.h>
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
@@ -39,7 +41,7 @@
 
 TaskHandle_t Handle_socket_task = NULL; //创建句柄
 SOFTAP_CFG g_softAP_config;
-
+struct sockaddr_in6 udp_source_addr;
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
@@ -66,6 +68,7 @@ static int32 wifi_init_softap(void)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    esp_wifi_set_ps (WIFI_PS_NONE); // 关闭WiFi低功耗 否则将会造成至少50ms以上的延时
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
     // 2.设置WiFi工作信息
@@ -98,23 +101,35 @@ static int32 wifi_init_softap(void)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static int32 tcp_send_data(uint8 *data, uint32 data_len)
+static int32 send_data(uint8 *data, uint32 data_len)
 {
     int to_write = data_len;
-
+    // while (to_write > 0) {
+    //     int written = send(g_softAP_config.socket_client_fd, data + (data_len - to_write), to_write, 0);
+    //     if (written < 0) {
+    //         GUA_LOGE("Error occurred during sending: errno %d", errno);
+    //         return REV_ERR;
+    //     }
+    //     to_write -= written;
+    // }
+#ifdef TCP_TCP 
     if (g_softAP_config.socket_client_fd == -1) {
         GUA_LOGE("socket is shutdown!");
         return REV_ERR;
     }
 
-    while (to_write > 0) {
-        int written = send(g_softAP_config.socket_client_fd, data + (data_len - to_write), to_write, 0);
-        if (written < 0) {
-            GUA_LOGE("Error occurred during sending: errno %d", errno);
-            return REV_ERR;
-        }
-        to_write -= written;
+    int written = send(g_softAP_config.socket_client_fd, data, to_write, 0);
+    if (written < to_write) {
+        GUA_LOGE("Error occurred during sending: errno %d", errno);
+        return REV_ERR;
     }
+#else
+    to_write = sendto(g_softAP_config.socket_UDP_fd, data, data_len, 0, (struct sockaddr *)&udp_source_addr, sizeof(udp_source_addr));
+    if (to_write < 0) {
+//        GUA_LOGE("Error occurred during sending: errno %d", errno);
+        return REV_ERR;
+    }
+#endif
     return REV_OK;
 }
 
@@ -141,7 +156,7 @@ static int32 tcp_recv_data(const int sock)
     return REV_ERR;
 }
 
-static void tcp_init_server(void * pvParameters)
+void tcp_init_server(void * pvParameters)
 {
     char addr_str[SOCKET_RECV_BUF_LEN];
     int addr_family = AF_INET;
@@ -215,6 +230,73 @@ static void tcp_init_server(void * pvParameters)
 }
 
 
+void udp_init_server(void * pvParameters)
+{
+    // char rx_buffer[128];
+//    char addr_str[128];
+    int ip_protocol = 0;
+    struct sockaddr_in6 dest_addr;
+    g_softAP_config.socket_UDP_fd = -1;
+    while (1) {
+
+		struct sockaddr_in *dest_addr_ip4 = (struct sockaddr_in *)&dest_addr;
+		dest_addr_ip4->sin_addr.s_addr = htonl(INADDR_ANY);
+		dest_addr_ip4->sin_family = AF_INET;
+		dest_addr_ip4->sin_port = htons(PORT);
+		ip_protocol = IPPROTO_IP;
+
+        g_softAP_config.socket_UDP_fd = socket(AF_INET, SOCK_DGRAM, ip_protocol);
+        if (g_softAP_config.socket_UDP_fd < 0) {
+            GUA_LOGE("Unable to create socket: errno %d", errno);
+            break;
+        }
+        GUA_LOGI("Socket created");
+
+        int err = bind(g_softAP_config.socket_UDP_fd, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        if (err < 0) {
+            GUA_LOGE("Socket unable to bind: errno %d", errno);
+        }
+        GUA_LOGI("Socket bound, port %d", PORT);
+
+        GUA_LOGI("Waiting for data");
+        while (1) {
+            
+//             struct sockaddr_in6 source_addr; // Large enough for both IPv4 or IPv6
+            socklen_t socklen = sizeof(udp_source_addr);
+            int len = recvfrom(g_softAP_config.socket_UDP_fd, g_softAP_config.recv_buffer, sizeof(g_softAP_config.recv_buffer) - 1, 0, (struct sockaddr *)&udp_source_addr, &socklen);
+
+            // Error occurred during receiving
+            if (len < 0) {
+                GUA_LOGE("recvfrom failed: errno %d", errno);
+                break;
+            }
+            // Data received
+            else {
+                // // Get the sender's ip address as string
+                // if (udp_source_addr.sin6_family == PF_INET) {
+                //     inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr.s_addr, addr_str, sizeof(addr_str) - 1);
+                // } else if (udp_source_addr.sin6_family == PF_INET6) {
+                //     inet6_ntoa_r(udp_source_addr.sin6_addr, addr_str, sizeof(addr_str) - 1);
+                // }
+
+                // rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
+                // GUA_LOGI("Received %d bytes from %s:", len, addr_str);
+                // GUA_LOGI("%s", rx_buffer);           
+                g_softAP_config.recv_len = len;
+                g_softAP_config.recv_data_callback(g_softAP_config.recv_buffer, g_softAP_config.recv_len);    
+            }
+        }
+
+        if (g_softAP_config.socket_UDP_fd != -1) {
+            GUA_LOGE("Shutting down socket and restarting...");
+            shutdown(g_softAP_config.socket_UDP_fd, 0);
+            close(g_softAP_config.socket_UDP_fd);
+        }
+    }
+    // vTaskDelete(NULL);
+}
+////////////////////////////////////////////////////对外接口///////////////////////////////////////////////////////////////////////////
+
 /**
  * @brief 初始化softAP模块
  * 
@@ -240,21 +322,33 @@ int32 cmp_softAP_init(void)
  * 
  * @return int32 
  */
-int32 cmp_softAP_tcp_init_server(void)
+int32 cmp_softAP_init_server(void)
 {
     int32 ret = REV_OK;
 
     memset(&g_softAP_config, 0, sizeof(SOFTAP_CFG));
     g_softAP_config.socket_client_fd = -1;
 
+#ifdef TCP_TCP
     // 创建任务
 	xTaskCreatePinnedToCore(tcp_init_server,            //任务函数
 							"init_tcp_server",          //任务名称
 							4096,                //堆栈大小
 							NULL,                //传递参数
-							1,                   //任务优先级
+							2,                   //任务优先级
 							&Handle_socket_task,    //任务句柄
 							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
+#else
+    // 创建任务
+	xTaskCreatePinnedToCore(udp_init_server,            //任务函数
+							"init_tcp_server",          //任务名称
+							4096,                //堆栈大小
+							NULL,                //传递参数
+							2,                   //任务优先级
+							&Handle_socket_task,    //任务句柄
+							tskNO_AFFINITY);     //无关联，不绑定在任何一个核上
+#endif
+
     return ret;
 }
 
@@ -263,7 +357,7 @@ int32 cmp_softAP_tcp_init_server(void)
  * 
  * @return int32 
  */
-void cmp_softAP_tcp_register_recv(cmp_softAP_recv_data_callback fun_cb)
+void cmp_softAP_register_recv(cmp_softAP_recv_data_callback fun_cb)
 {
     g_softAP_config.recv_data_callback = fun_cb;
 }
@@ -273,9 +367,51 @@ void cmp_softAP_tcp_register_recv(cmp_softAP_recv_data_callback fun_cb)
  * 
  * @return int32 
  */
-int32 cmp_softAP_tcp_send_data(uint8 *buf, uint32 buf_len)
+int32 cmp_softAP_send_data(uint8 *buf, uint32 buf_len)
 {
     int32 ret = 0;
-    ret = tcp_send_data(buf, buf_len);
+
+    ret = send_data(buf, buf_len);
+
     return ret;
 }
+
+/**
+ * @brief 获取连接状态
+ * 
+ * @return int32 
+ */
+int32 cmp_softAP_get_connect_status(void)
+{
+#ifdef TCP_TCP
+    if (g_softAP_config.socket_client_fd == -1) {
+        return CMP_SOFTAP_TCP_DISCONNECTED;
+    }
+    return CMP_SOFTAP_TCP_CONNECTED;
+#else
+    if (g_softAP_config.socket_UDP_fd == -1) {
+        return CMP_SOFTAP_TCP_DISCONNECTED;
+    }
+    return CMP_SOFTAP_TCP_CONNECTED;
+#endif  
+}
+
+
+/**
+ * @brief 创建基于AP模式下的socket的udp server端
+ * 
+ * @return int32 
+ */
+int32 cmp_softAP_tcp_init_server(void)
+{
+    int32 ret = REV_OK;
+
+    memset(&g_softAP_config, 0, sizeof(SOFTAP_CFG));
+    g_softAP_config.socket_client_fd = -1;
+
+    
+    return ret;
+}
+
+
+// 可参考： https://www.jianshu.com/p/568c4c2d415b
