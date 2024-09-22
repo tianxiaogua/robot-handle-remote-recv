@@ -8,6 +8,9 @@ file(GLOB_RECURSE SOURCES
 	../APP/component/softAP/softAP.c 
 	../APP/component/usb/usb.c 
 	../APP/component/keyScan/keyscan.c 
+	../APP/component/LCD/*.c
+	../APP/component/PCA9557/*.c
+	../APPcomponent//MPU6050/*.c
 )
  
 set(inc
@@ -20,8 +23,11 @@ set(inc
 ../APP/component/softAP
 ../APP/component/usb
 ../APP/component/keyScan
+../APP/component/LCD
+../APP/component/PCA9557
+../APP/component/MPU6050
 )
-
+ 
 idf_component_register(
 	SRCS ${SOURCES} 
 	INCLUDE_DIRS ${inc}

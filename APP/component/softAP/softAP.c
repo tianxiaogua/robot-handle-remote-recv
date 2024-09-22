@@ -152,7 +152,7 @@ static void tcp_init_server(void * pvParameters)
     socklen_t addr_len = sizeof(source_addr);
     struct sockaddr_in6 dest_addr;
 	struct sockaddr_in *dest_addr_ip4 = (struct sockaddr_in *)&dest_addr;
-    g_softAP_config.socket_client_fd = 0;
+    g_softAP_config.socket_client_fd = -1;
 
     // 创建socket server
 
@@ -243,6 +243,10 @@ int32 cmp_softAP_init(void)
 int32 cmp_softAP_tcp_init_server(void)
 {
     int32 ret = REV_OK;
+
+    memset(&g_softAP_config, 0, sizeof(SOFTAP_CFG));
+    g_softAP_config.socket_client_fd = -1;
+
     // 创建任务
 	xTaskCreatePinnedToCore(tcp_init_server,            //任务函数
 							"init_tcp_server",          //任务名称

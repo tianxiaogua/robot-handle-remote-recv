@@ -51,7 +51,7 @@ int32 cmp_softAP_tcp_init_server(void);
  * 
  * @return int32 
  */
-void cmp_softAP_register_recv(cmp_softAP_recv_data_callback fun_cb);
+void cmp_softAP_tcp_register_recv(cmp_softAP_recv_data_callback fun_cb);
 
 /**
  * @brief 通过网络发送数据

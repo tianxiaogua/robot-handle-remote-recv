@@ -270,13 +270,22 @@ int32 protocol_encode(char *json_str, KEY_DETECTION *key_value)
 		case PRO_VALUE_RY_E:     value_data = key_value->RY; break;
 		default : GUA_LOGE("input json value error!");
 		}
-		ret = cJSON_AddNumberToObject(p_value, pro_value_name[i], value_data); 
+		printf("%s:%d ", pro_value_name[i], value_data);
+		ret = cJSON_AddNumberToObject(p_value, pro_value_name[i], value_data);
 		if (ret == NULL) {
 			GUA_LOGE("cjson add error!");
 		}
     }
+    printf("\n");
 	json_buf = cJSON_PrintUnformatted(p_root);
 	strcpy(json_str, json_buf);
-	GUA_LOGI("out json:%s", json_buf);
+//	GUA_LOGI("out json:%s", json_buf);
+
+	cJSON_Delete(p_root);
+	cJSON_free(json_buf);
+
+
+	printf("free_heap_size = %ld\n", esp_get_free_heap_size());
+
 	return REV_OK;
 }

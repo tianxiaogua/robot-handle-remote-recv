@@ -32,6 +32,7 @@ void LCD_Fill(u16 xsta,u16 ysta,u16 xend,u16 yend,u16 color)
 		spi_write(spi2,data_buf,buf_len);
 		LCD_CS_Set();
 	}
+	free(data_buf);
 }
 
 /******************************************************************************

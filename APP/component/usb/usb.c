@@ -78,7 +78,7 @@ TU_ATTR_WEAK bool tud_hid_set_idle_cb(uint8_t instance, uint8_t idle_rate)
 
 TU_ATTR_WEAK void tud_hid_report_complete_cb(uint8_t instance, uint8_t const* report, uint16_t len)
 {
-	GUA_LOGI("tud_hid_report_complete_cb %d %s %d", instance, report, len);
+//	GUA_LOGI("tud_hid_report_complete_cb %d %s %d", instance, report, len);
 }
 
 static void tinyusb(void * pvParameters)
