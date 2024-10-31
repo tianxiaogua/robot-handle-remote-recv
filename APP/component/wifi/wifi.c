@@ -90,8 +90,8 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     }
 
     if(event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    	set_wifi_connect_state(WIFI_STATE_FALE);
     	GUA_LOGE("Connect error event_base:%d event_id:%d", (int)event_base, (int)event_id);
-		set_wifi_connect_state(WIFI_STATE_FALE);
 	}
 }
 
@@ -238,6 +238,10 @@ static void sta_connect_wifi(void * pvParameters)
 			} else if (ret == WIFI_STATE_WAIT) {
 				GUA_LOGW("wifi just wait connect...");
 				delay_ms(1000);
+			} else if (ret == WIFI_STATE_FALE){
+				GUA_LOGE("wifi disconnected!");
+				g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
+				break;
 			} else {
 				GUA_LOGE("wifi disconnected!");
 				g_wifi_config.event_handle_callback(WIFI_TCP_DISCONNECTED);
@@ -396,6 +400,12 @@ static int32 udp_client_recv_data(uint8_t *data_buf, uint32 data_len)
     int len = 0;            //长度
     //创建udp客户端
     socklen_t udpsocklen = sizeof(udp_client_addr);      //地址长度
+
+    if (g_wifi_config.tcp_socket_client_fd < 0) {
+		GUA_LOGE("udp client send error!");
+		return REV_ERR;
+	}
+
 	//读取接收数据
 	len = recvfrom(g_wifi_config.udp_client_fd, data_buf, data_len, 0, (struct sockaddr *) &udp_client_addr, &udpsocklen);
 	if (len > 0) {
@@ -415,6 +425,12 @@ static int32 udp_client_send_data(uint8_t *data_buf, uint32 data_len)
 {
 	int len = 0;            //长度
 	unsigned int udpsocklen = sizeof(udp_client_addr);      //地址长度
+
+	if (g_wifi_config.tcp_socket_client_fd < 0) {
+		GUA_LOGE("udp client send error!");
+		return REV_ERR;
+	}
+
 	//测试udp server,返回发送成功的长度
 	len = sendto(g_wifi_config.udp_client_fd, data_buf, data_len, 0, (struct sockaddr *) &udp_client_addr, udpsocklen);
 	if (len > 0) {
@@ -504,10 +520,20 @@ int32 cmp_wifi_socket_client_init(void)
  * 
  * @return int32 
  */
-int32 cmp_wifi_tcp_client_deinit(void)
+int32 cmp_wifi_client_deinit(void)
 {
+	int32 ret = 0;
 	GUA_LOGW("disconnect tcp");
-	return close(g_wifi_config.tcp_socket_client_fd);
+
+	if (g_wifi_config.type == SOCKET_UPD) {
+		ret = close(g_wifi_config.udp_client_fd);
+		g_wifi_config.udp_client_fd = -1;
+	}
+	if (g_wifi_config.type == SOCKET_TCP) {
+		ret = close(g_wifi_config.tcp_socket_client_fd);
+		g_wifi_config.tcp_socket_client_fd = -1;
+	}
+	return ret;
 }
 
 

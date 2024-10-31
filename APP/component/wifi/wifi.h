@@ -49,7 +49,7 @@ int32 cmp_wifi_socket_client_init(void);
  * 
  * @return int32 
  */
-int32 cmp_wifi_tcp_client_deinit(void);
+int32 cmp_wifi_client_deinit(void);
 
 /**
  * @brief 注册接收回调函数

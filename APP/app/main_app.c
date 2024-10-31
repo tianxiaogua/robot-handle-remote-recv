@@ -36,7 +36,7 @@
 #include "protocol.h"
 #include "main_app.h"
 
-#if 1
+#if 0
 #define SOFT_FRO_GAMEPAD_RECV
 #endif
 
@@ -196,7 +196,7 @@ static int32 app_wifi_event_handle_cb(int32 evint_handle)
 		}
 		break;
 	case WIFI_TCP_DISCONNECTED:
-		cmp_wifi_tcp_client_deinit();
+		cmp_wifi_client_deinit();
 		break;
 	default:
 		GUA_LOGE("event callback is error!");
